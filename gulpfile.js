@@ -2,6 +2,7 @@
 const { src, dest, task, watch, series, parallel } = require("gulp");
 const del = require("del");
 const sass = require("gulp-sass");
+const sourcemaps = require("gulp-sourcemaps");
 const babel = require("gulp-babel");
 const cleanCSS = require("gulp-clean-css");
 const rename = require("gulp-rename");
@@ -9,6 +10,8 @@ const merge = require("merge-stream");
 const htmlreplace = require("gulp-html-replace");
 const autoprefixer = require("gulp-autoprefixer");
 const browserSync = require("browser-sync").create();
+
+const imagemin = require("gulp-imagemin");
 
 task("clean", () => del(["./dist", "./assets/css/app.css"]));
 
@@ -51,6 +54,7 @@ task(
     "scss",
     series("bootstrap:scss", function compileScss() {
         return src(["./assets/scss/*.scss"])
+            .pipe(sourcemaps.init())
             .pipe(
                 sass
                     .sync({
@@ -59,6 +63,7 @@ task(
                     .on("error", sass.logError)
             )
             .pipe(autoprefixer())
+            .pipe(sourcemaps.write())
             .pipe(dest("./assets/css"));
     })
 );
@@ -125,13 +130,27 @@ task("watch", function browserDev(done) {
     done();
 });
 
+task("image:build", () =>
+    src("./assets/img/*")
+        .pipe(
+            imagemin([
+                imagemin.mozjpeg({ quality: 75, progressive: true }),
+                imagemin.optipng({ optimizationLevel: 5 }),
+                imagemin.svgo({
+                    plugins: [{ removeViewBox: true }, { cleanupIDs: false }],
+                }),
+            ])
+        )
+        .pipe(dest("dist/img"))
+);
+
 task(
     "build",
     series(
-        parallel("css:minify", "js:minify", "vendor"),
+        parallel("css:minify", "js:minify", "vendor", "image:build"),
         "vendor:build",
         function copyAssets() {
-            return src(["*.html", "favicon.svg", "assets/img/**"], {
+            return src(["*.html"], {
                 base: "./",
             }).pipe(dest("dist"));
         }
